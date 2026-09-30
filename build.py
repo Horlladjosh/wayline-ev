@@ -1,9 +1,12 @@
 from pathlib import Path
-from html import escape
+from html import escape, unescape
+import json
 import re
 
 ROOT = Path(__file__).parent / 'dist'
 ROOT.mkdir(exist_ok=True)
+SITE_URL = 'https://wayline-ev.vercel.app'
+IMAGE_INFO = json.loads((ROOT / 'assets/image-info.json').read_text())
 
 favicon = "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2320241f'/%3E%3Cpath d='M10 19l9 28h8l5-17 5 17h8l9-28h-8l-5 18-5-18h-8l-5 18-5-18z' fill='%23e6ba3c'/%3E%3C/svg%3E"
 
@@ -14,7 +17,14 @@ projects = [
 ]
 
 def img(name, alt, extra=''):
-    return f'<img src="/assets/{name}" alt="{escape(alt)}" loading="lazy" {extra}>'
+    stem = Path(name).stem
+    source = f'/assets/{stem}'
+    loading = 'eager' if 'loading="eager"' in extra else 'lazy'
+    extra = re.sub(r'loading="[^"]*"', '', extra).strip()
+    info = IMAGE_INFO[name]
+    variants = info['widths']
+    srcset = ', '.join(f'{source}-{width}.webp {width}w' for width in variants)
+    return f'<img src="{source}-{variants[-1]}.webp" srcset="{srcset}" sizes="(max-width: 980px) 100vw, 65vw" width="{info["width"]}" height="{info["height"]}" alt="{escape(alt)}" loading="{loading}" decoding="async" {extra}>'
 
 def header(active=''):
     links = [('Solutions','/solutions/'),('Our approach','/approach/'),('Projects','/projects/'),('Company','/company/')]
@@ -28,7 +38,7 @@ def footer():
     return '<footer class="site-footer"><div class="site-footer__top"><a class="wordmark" href="/">wayline</a><nav class="site-footer__nav" aria-label="Footer navigation"><a href="/solutions/">Solutions</a><a href="/approach/">Our approach</a><a href="/projects/">Projects</a><a href="/company/">Company</a><a href="/plan-a-site/">Plan a charging site</a><a href="/terms/">Terms & privacy</a></nav></div><div class="site-footer__bottom"><span>EV charging for places people use.</span><span>© 2026 Wayline · <a href="/terms/">Terms, privacy & image credits</a></span></div></footer>'
 
 def page(title, description, content, active='', show_cta=True):
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#20241f"><title>{escape(title)} | Wayline</title><meta name="description" content="{escape(description)}"><link rel="icon" type="image/svg+xml" href="data:image/svg+xml,{favicon}"><link rel="stylesheet" href="/styles.css"></head><body>{header(active)}<main>{content}</main>{invitation() if show_cta else ''}{footer()}<script src="/site.js" defer></script></body></html>'''
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#20241f"><title>{escape(title)} | Wayline</title><meta name="description" content="{escape(description)}"><link rel="icon" type="image/svg+xml" href="data:image/svg+xml,{favicon}"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"><link rel="stylesheet" href="/styles.css"></head><body>{header(active)}<main>{content}</main>{invitation() if show_cta else ''}{footer()}<script src="/site.js" defer></script><script>window.va=window.va||function(){{(window.vaq=window.vaq||[]).push(arguments);}};</script><script defer src="/_vercel/insights/script.js"></script></body></html>'''
 
 home = f'''
 <div class="frame"><section class="home-hero"><div class="home-hero__image">{img('car-and-charger.jpg','An electric car plugged into a charging unit in a parking area','fetchpriority="high" loading="eager"')}<span class="image-tab">Charging belongs where people already park.</span></div><div class="home-hero__copy"><h1>A place to park.<br>A reason to plug in.</h1><p class="body-copy">Wayline designs, installs and runs charging for hotels, workplaces and residential buildings. One partner from the first site survey to the everyday service.</p><a class="solid-link" href="/plan-a-site/">Plan a charging site</a></div></section>
@@ -114,6 +124,8 @@ credits_section = '''<section><h2>Image licences & credits</h2><div><p>Photograp
 <li><a href="https://www.pexels.com/photo/office-building-and-parking-lot-on-street-4889298/" target="_blank" rel="noopener noreferrer">Commercial property</a> — Erik Mclean.</li></ul></div></section>'''
 terms = re.sub(r'<section><h2>Image licences & credits</h2>.*?</section>', credits_section, terms)
 
+terms = terms.replace('<section><h2>Site performance</h2>', '<section><h2>Website analytics</h2><div><p>We use Vercel Web Analytics to understand page visits and improve this website. It does not use cookies to identify visitors. Analytics may include pages visited, referral sources, approximate country, device and browser information.</p></div></section><section><h2>Site performance</h2>')
+
 pages = {
     'index.html': page('Commercial EV charging for properties','Wayline plans, installs and manages EV charging for hotels, workplaces and residential developments.',home),
     'solutions/index.html': page('Charging solutions','EV charging designed for hotels, workplaces and residential developments.',solutions,'Solutions'),
@@ -126,7 +138,25 @@ pages = {
 for i,p in enumerate(projects):
     pages[f'projects/{p["slug"]}/index.html'] = page(p['name'],f'{p["name"]}, {p["city"]}: {p["number"]} charge points and {p["energy"]} MWh delivered.',project_detail(p,projects[(i+1)%len(projects)]),'Projects')
 for filename,html in pages.items():
+    route = '/' if filename == 'index.html' else '/' + filename.removesuffix('index.html')
+    canonical = SITE_URL + route
+    title = unescape(re.search(r'<title>(.*?)</title>', html).group(1))
+    description = unescape(re.search(r'<meta name="description" content="([^"]*)"', html).group(1))
+    og_image = SITE_URL + '/assets/wayline-og.png'
+    metadata = f'<link rel="canonical" href="{canonical}"><meta property="og:type" content="website"><meta property="og:site_name" content="Wayline"><meta property="og:title" content="{escape(title)}"><meta property="og:description" content="{escape(description)}"><meta property="og:url" content="{canonical}"><meta property="og:image" content="{og_image}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png"><meta property="og:image:alt" content="Wayline. EV charging for places people use."><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{escape(title)}"><meta name="twitter:description" content="{escape(description)}"><meta name="twitter:image" content="{og_image}"><meta name="twitter:image:alt" content="Wayline. EV charging for places people use.">'
+    schema = {'@context': 'https://schema.org', '@graph': [
+        {'@type': 'WebSite', '@id': SITE_URL + '/#website', 'url': SITE_URL + '/', 'name': 'Wayline', 'inLanguage': 'en-GB'},
+        {'@type': 'WebPage', '@id': canonical + '#webpage', 'url': canonical, 'name': title, 'description': description, 'isPartOf': {'@id': SITE_URL + '/#website'}, 'inLanguage': 'en-GB'}
+    ]}
+    metadata += '<script type="application/ld+json">' + json.dumps(schema).replace('<', '\\u003c') + '</script>'
+    html = html.replace('</head>', metadata + '</head>')
+    if filename != 'index.html':
+        html = re.sub(r'(<img[^>]*?)loading="lazy"', r'\1loading="eager" fetchpriority="high"', html, count=1)
     dest = ROOT / filename
     dest.parent.mkdir(parents=True,exist_ok=True)
     dest.write_text(html)
 print('Wrote',len(pages),'pages')
+
+urls = [SITE_URL + ('/' if filename == 'index.html' else '/' + filename.removesuffix('index.html')) for filename in pages]
+(ROOT / 'sitemap.xml').write_text('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ''.join('<url><loc>' + url + '</loc></url>' for url in urls) + '</urlset>\n')
+(ROOT / 'robots.txt').write_text('User-agent: *\nAllow: /\n\nSitemap: ' + SITE_URL + '/sitemap.xml\n')

@@ -53,3 +53,9 @@ The package preserves the current website, including its responsive rules, mobil
 ## Provenance
 
 Exported from Wayline version 13, source commit `c7b3d0b05ff08c009ee78854b8ab6dae1fbf2e9d`. Original hosting metadata, credentials, Git history and earlier deployment archives are excluded from this handoff.
+
+## Analytics and search metadata
+
+Vercel Web Analytics is included on every page. Enable it in Vercel before deploying. Canonical URLs, Open Graph and Twitter cards, basic WebSite/WebPage structured data, robots.txt and sitemap.xml use https://wayline-ev.vercel.app. If you change the domain, update SITE_URL in build.py and regenerate the site. The shared OG preview image is dist/assets/wayline-og.png.
+
+Responsive WebP photo variants are listed in dist/assets/image-info.json. If you replace a source JPEG, regenerate its variants and update that manifest. Image width descriptors must match the files. The generator uses this manifest and preserves the original JPEGs.

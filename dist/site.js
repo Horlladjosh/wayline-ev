@@ -69,11 +69,12 @@ if (!reduceMotion && 'IntersectionObserver' in window) {
     });
   }, { threshold: 0.08, rootMargin: '0px 0px -6% 0px' });
 
-  sections.forEach(section => {
-    if (section.getBoundingClientRect().top > window.innerHeight * 0.82) {
-      section.classList.add('motion-pending');
-      observer.observe(section);
-    }
+  const pendingSections = Array.from(sections).filter(
+    section => section.getBoundingClientRect().top > window.innerHeight * 0.82
+  );
+  pendingSections.forEach(section => {
+    section.classList.add('motion-pending');
+    observer.observe(section);
   });
 }
 
